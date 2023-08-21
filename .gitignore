@@ -12,3 +12,6 @@ test/
 
 # Mac Hidden Files
 .DS_Store
+
+node_modules/
+.idea

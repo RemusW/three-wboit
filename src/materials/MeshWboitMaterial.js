@@ -4,35 +4,39 @@
  * Basic material with support for weighted, blended order-independent transparency
  */
 
-import { UniformsUtils, UniformsLib, ShaderMaterial, MultiplyOperation } from 'three';
+import {
+  UniformsUtils,
+  UniformsLib,
+  ShaderMaterial,
+  MultiplyOperation,
+} from "three";
 
 const WboitStages = {
-	Normal: 0.0,
-	Acummulation: 1.0,
-	Revealage: 2.0,
+  Normal: 0.0,
+  Acummulation: 1.0,
+  Revealage: 2.0,
 };
 
 const WboitBasicShader = {
+  // based on MeshBasicMaterial
+  // https://github.com/mrdoob/three.js/blob/dev/src/materials/MeshBasicMaterial.js
+  // https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib.js
+  // https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib/meshbasic.glsl.js
 
-	// based on MeshBasicMaterial
-	// https://github.com/mrdoob/three.js/blob/dev/src/materials/MeshBasicMaterial.js
-	// https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib.js
-	// https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib/meshbasic.glsl.js
+  uniforms: UniformsUtils.merge([
+    {
+      renderStage: { value: 0.0 },
+      weight: { value: 1.0 },
+    },
+    UniformsLib.common,
+    UniformsLib.specularmap,
+    UniformsLib.envmap,
+    UniformsLib.aomap,
+    UniformsLib.lightmap,
+    UniformsLib.fog,
+  ]),
 
-	uniforms: UniformsUtils.merge( [
-		{
-			renderStage: { value: 0.0 },
-			weight: { value: 1.0 },
-		},
-		UniformsLib.common,
-		UniformsLib.specularmap,
-		UniformsLib.envmap,
-		UniformsLib.aomap,
-		UniformsLib.lightmap,
-		UniformsLib.fog
-	] ),
-
-	vertexShader: /* glsl */`
+  vertexShader: /* glsl */ `
 
 		// MeshBasicMaterial
 
@@ -77,7 +81,7 @@ const WboitBasicShader = {
 
 		}`,
 
-	fragmentShader: /* glsl */`
+  fragmentShader: /* glsl */ `
 
 		precision highp float;
 		precision highp int;
@@ -164,12 +168,15 @@ const WboitBasicShader = {
 
 			// MeshWboitMaterial
 
-			if ( renderStage == ${ WboitStages.Acummulation.toFixed( 1 ) } ) {
+			if ( renderStage == ${WboitStages.Acummulation.toFixed(1)} ) {
 
 				vec4 accum = gl_FragColor.rgba;
 
 				#ifndef PREMULTIPLIED_ALPHA
-					accum.rgb *= accum.a;
+					// accum.rgb *= accum.a;
+					vec4 alphaMapColor = texture2D(alphamapTexture, vUv);
+					float alphaValue = alphaMapColor.r;
+					accum.rgb *= alphaValue;
 				#endif
 
 				float z = gl_FragCoord.z;
@@ -186,7 +193,7 @@ const WboitBasicShader = {
 
 				gl_FragColor = accum * w;
 
-			} else if ( renderStage == ${ WboitStages.Revealage.toFixed( 1 ) } ) {
+			} else if ( renderStage == ${WboitStages.Revealage.toFixed(1)} ) {
 
 				/* McGuire 10/2013 */
 				// gl_FragColor = vec4( gl_FragColor.a );
@@ -196,143 +203,131 @@ const WboitBasicShader = {
 
 			}
 
+				gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
 		}`,
-
 };
 
 //
 
 class MeshWboitMaterial extends ShaderMaterial {
+  constructor(parameters = {}) {
+    super();
 
-	constructor( parameters = {} ) {
+    this.isMeshWboitMaterial = true;
 
-		super();
+    this.type = "MeshWboitMaterial";
 
-		this.isMeshWboitMaterial = true;
+    // Flag for WboitPass
 
-		this.type = 'MeshWboitMaterial';
+    this.wboitEnabled = true;
 
-		// Flag for WboitPass
+    //
 
-		this.wboitEnabled = true;
+    const shader = WboitBasicShader;
 
-		//
+    this.defines = {};
+    this.uniforms = UniformsUtils.clone(shader.uniforms);
+    this.vertexShader = shader.vertexShader;
+    this.fragmentShader = shader.fragmentShader;
 
-		const shader = WboitBasicShader;
+    // properties (no uniforms)
 
-		this.defines = {};
-		this.uniforms = UniformsUtils.clone( shader.uniforms );
-		this.vertexShader = shader.vertexShader;
-		this.fragmentShader = shader.fragmentShader;
+    this.combine = MultiplyOperation;
 
-		// properties (no uniforms)
+    this.transparent = true;
 
-		this.combine = MultiplyOperation;
+    this.wireframe = false;
+    this.wireframeLinewidth = 1;
+    this.wireframeLinecap = "round";
+    this.wireframeLinejoin = "round";
 
-		this.transparent = true;
+    this.fog = true;
 
-		this.wireframe = false;
-		this.wireframeLinewidth = 1;
-		this.wireframeLinecap = 'round';
-		this.wireframeLinejoin = 'round';
+    // properties (associated w/ uniforms)
 
-		this.fog = true;
+    const exposePropertyNames = [
+      // Material
 
-		// properties (associated w/ uniforms)
+      "opacity",
 
-		const exposePropertyNames = [
+      // MeshBasicMaterial
 
-			// Material
+      "diffuse",
+      "map",
+      "lightMap",
+      "lightMapIntensity",
+      "aoMap",
+      "aoMapIntensity",
+      "specularMap",
+      "alphaMap",
+      "alphaTest",
+      "envMap",
+      "reflectivity",
+      "refractionRatio",
 
-			'opacity',
+      // MeshWboitMaterial,
 
-			// MeshBasicMaterial
+      "weight",
+    ];
 
-			'diffuse',
-			'map',
-			'lightMap',
-			'lightMapIntensity',
-			'aoMap',
-			'aoMapIntensity',
-			'specularMap',
-			'alphaMap',
-			'alphaTest',
-			'envMap',
-			'reflectivity',
-			'refractionRatio',
+    for (const propertyName of exposePropertyNames) {
+      Object.defineProperty(this, propertyName, {
+        get: function () {
+          return this.uniforms[propertyName].value;
+        },
 
-			// MeshWboitMaterial,
+        set: function (value) {
+          this.uniforms[propertyName].value = value;
+        },
+      });
+    }
 
-			'weight',
+    Object.defineProperty(
+      this,
+      "color",
+      Object.getOwnPropertyDescriptor(this, "diffuse")
+    );
 
-		];
+    this.setValues(parameters);
+  }
 
-		for ( const propertyName of exposePropertyNames ) {
+  copy(source) {
+    super.copy(source);
 
-			Object.defineProperty( this, propertyName, {
+    // MeshBasicMaterial
 
-				get: function () {
+    this.color.copy(source.color);
 
-					return this.uniforms[ propertyName ].value;
+    this.map = source.map;
 
-				},
+    this.lightMap = source.lightMap;
+    this.lightMapIntensity = source.lightMapIntensity;
 
-				set: function ( value ) {
+    this.aoMap = source.aoMap;
+    this.aoMapIntensity = source.aoMapIntensity;
 
-					this.uniforms[ propertyName ].value = value;
+    this.specularMap = source.specularMap;
 
-				}
+    this.alphaMap = source.alphaMap;
 
-			} );
+    this.envMap = source.envMap;
+    this.combine = source.combine;
+    this.reflectivity = source.reflectivity;
+    this.refractionRatio = source.refractionRatio;
 
-		}
+    this.wireframe = source.wireframe;
+    this.wireframeLinewidth = source.wireframeLinewidth;
+    this.wireframeLinecap = source.wireframeLinecap;
+    this.wireframeLinejoin = source.wireframeLinejoin;
 
-		Object.defineProperty( this, 'color', Object.getOwnPropertyDescriptor( this, 'diffuse' ) );
+    this.fog = source.fog;
 
-		this.setValues( parameters );
+    // MeshWboitMaterial
 
-	}
+    this.weight = source.weight;
 
-	copy( source ) {
-
-		super.copy( source );
-
-		// MeshBasicMaterial
-
-		this.color.copy( source.color );
-
-		this.map = source.map;
-
-		this.lightMap = source.lightMap;
-		this.lightMapIntensity = source.lightMapIntensity;
-
-		this.aoMap = source.aoMap;
-		this.aoMapIntensity = source.aoMapIntensity;
-
-		this.specularMap = source.specularMap;
-
-		this.alphaMap = source.alphaMap;
-
-		this.envMap = source.envMap;
-		this.combine = source.combine;
-		this.reflectivity = source.reflectivity;
-		this.refractionRatio = source.refractionRatio;
-
-		this.wireframe = source.wireframe;
-		this.wireframeLinewidth = source.wireframeLinewidth;
-		this.wireframeLinecap = source.wireframeLinecap;
-		this.wireframeLinejoin = source.wireframeLinejoin;
-
-		this.fog = source.fog;
-
-		// MeshWboitMaterial
-
-		this.weight = source.weight;
-
-		return this;
-
-	}
-
+    return this;
+  }
 }
 
 export { MeshWboitMaterial, WboitStages };
