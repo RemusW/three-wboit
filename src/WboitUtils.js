@@ -3,7 +3,6 @@
  */
 
 import { WboitStages } from "./materials/MeshWboitMaterial.js";
-import pbrFragmentShader from "../lib/clo/shader/pbrFragmentShader.frag";
 
 let _materialCounter = 0;
 const _stage = { value: 0.5 };
@@ -57,7 +56,6 @@ class WboitUtils {
 						float w = clamp( pow( ( accum.a * 8.0 + 0.001 ) * ( - z * scaleWeight + 1.0 ), 3.0 ) * 1000.0, 0.001, 300.0 );
 
 						gl_FragColor = accum * w;
-						gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 
 					} else if ( renderStage == ${WboitStages.Revealage.toFixed(1)} ) {
 

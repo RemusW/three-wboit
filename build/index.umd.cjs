@@ -1,13 +1,12 @@
 (function (global, factory) {
-	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three'), require('three/addons/postprocessing/Pass.js'), require('three/addons/postprocessing/ShaderPass.js')) :
-	typeof define === 'function' && define.amd ? define(['exports', 'three', 'three/addons/postprocessing/Pass.js', 'three/addons/postprocessing/ShaderPass.js'], factory) :
+	typeof exports === 'object' && typeof module !== 'undefined' ? factory(exports, require('three'), require('three/examples/jsm/postprocessing/Pass'), require('three/examples/jsm/postprocessing/ShaderPass')) :
+	typeof define === 'function' && define.amd ? define(['exports', 'three', 'three/examples/jsm/postprocessing/Pass', 'three/examples/jsm/postprocessing/ShaderPass'], factory) :
 	(global = typeof globalThis !== 'undefined' ? globalThis : global || self, factory(global.THREE = global["three-wboit"] || {}, global.THREE, global.THREE, global.THREE));
-})(this, (function (exports, three, Pass_js, ShaderPass_js) { 'use strict';
+})(this, (function (exports, three, Pass, ShaderPass) { 'use strict';
 
 	/**
 	 * Color fill shader
 	 */
-
 
 	const FillShader = {
 
@@ -64,34 +63,32 @@
 	 * Basic material with support for weighted, blended order-independent transparency
 	 */
 
-
 	const WboitStages = {
-		Normal: 0.0,
-		Acummulation: 1.0,
-		Revealage: 2.0,
+	  Normal: 0.0,
+	  Acummulation: 1.0,
+	  Revealage: 2.0,
 	};
 
 	const WboitBasicShader = {
+	  // based on MeshBasicMaterial
+	  // https://github.com/mrdoob/three.js/blob/dev/src/materials/MeshBasicMaterial.js
+	  // https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib.js
+	  // https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib/meshbasic.glsl.js
 
-		// based on MeshBasicMaterial
-		// https://github.com/mrdoob/three.js/blob/dev/src/materials/MeshBasicMaterial.js
-		// https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib.js
-		// https://github.com/mrdoob/three.js/blob/dev/src/renderers/shaders/ShaderLib/meshbasic.glsl.js
+	  uniforms: three.UniformsUtils.merge([
+	    {
+	      renderStage: { value: 0.0 },
+	      weight: { value: 1.0 },
+	    },
+	    three.UniformsLib.common,
+	    three.UniformsLib.specularmap,
+	    three.UniformsLib.envmap,
+	    three.UniformsLib.aomap,
+	    three.UniformsLib.lightmap,
+	    three.UniformsLib.fog,
+	  ]),
 
-		uniforms: three.UniformsUtils.merge( [
-			{
-				renderStage: { value: 0.0 },
-				weight: { value: 1.0 },
-			},
-			three.UniformsLib.common,
-			three.UniformsLib.specularmap,
-			three.UniformsLib.envmap,
-			three.UniformsLib.aomap,
-			three.UniformsLib.lightmap,
-			three.UniformsLib.fog
-		] ),
-
-		vertexShader: /* glsl */`
+	  vertexShader: /* glsl */ `
 
 		// MeshBasicMaterial
 
@@ -136,7 +133,7 @@
 
 		}`,
 
-		fragmentShader: /* glsl */`
+	  fragmentShader: /* glsl */ `
 
 		precision highp float;
 		precision highp int;
@@ -223,175 +220,167 @@
 
 			// MeshWboitMaterial
 
-			if ( renderStage == ${ WboitStages.Acummulation.toFixed( 1 ) } ) {
+			if ( renderStage == ${WboitStages.Acummulation.toFixed(1)} ) {
 
 				vec4 accum = gl_FragColor.rgba;
 
 				#ifndef PREMULTIPLIED_ALPHA
-					accum.rgb *= accum.a;
+					// accum.rgb *= accum.a;
+					vec4 alphaMapColor = texture2D(alphamapTexture, vUv);
+					float alphaValue = alphaMapColor.r;
+					accum.rgb *= alphaValue;
 				#endif
 
 				float z = gl_FragCoord.z;
 
 				/* Equation #9 */
-				// float w = accum.a * clamp( 0.03 / ( 1e-5 + pow( abs( z ) / 200.0, 4.0 ) ), 0.01, 300.0 );
+				float w = accum.a * clamp( 0.03 / ( 1e-5 + pow( abs( z ) / 200.0, 4.0 ) ), 0.01, 300.0 );
 
 				/* McGuire 10/2013 */
 				// float w = clamp( pow( ( accum.a * 8.0 + 0.01 ) * ( - z * 0.95 + 1.0 ), 3.0 ) * 1e3, 1e-2, 3e2 );
 
 				/* Stevinz, Adjustable Weight */
-				float scaleWeight = 0.7 + ( 0.3 * weight );
-				float w = clamp( pow( ( accum.a * 8.0 + 0.001 ) * ( - z * scaleWeight + 1.0 ), 3.0 ) * 1000.0, 0.001, 300.0 );
+				//float scaleWeight = 0.7 + ( 0.3 * weight );
+				//float w = clamp( pow( ( accum.a * 8.0 + 0.001 ) * ( - z * scaleWeight + 1.0 ), 3.0 ) * 1000.0, 0.001, 300.0 );
 
 				gl_FragColor = accum * w;
+				gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 
-			} else if ( renderStage == ${ WboitStages.Revealage.toFixed( 1 ) } ) {
+			} else if ( renderStage == ${WboitStages.Revealage.toFixed(1)} ) {
 
 				/* McGuire 10/2013 */
-				// gl_FragColor = vec4( gl_FragColor.a );
+				gl_FragColor = vec4( gl_FragColor.a );
 
 				/* Stevinz, Distance Weighted */
-				gl_FragColor = vec4( gl_FragColor.a * gl_FragCoord.z );
+				//gl_FragColor = vec4( gl_FragColor.a * gl_FragCoord.z );
 
 			}
 
+				gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);
 		}`,
-
 	};
 
 	//
 
 	class MeshWboitMaterial extends three.ShaderMaterial {
+	  constructor(parameters = {}) {
+	    super();
 
-		constructor( parameters = {} ) {
+	    this.isMeshWboitMaterial = true;
 
-			super();
+	    this.type = "MeshWboitMaterial";
 
-			this.isMeshWboitMaterial = true;
+	    // Flag for WboitPass
 
-			this.type = 'MeshWboitMaterial';
+	    this.wboitEnabled = true;
 
-			// Flag for WboitPass
+	    //
 
-			this.wboitEnabled = true;
+	    const shader = WboitBasicShader;
 
-			//
+	    this.defines = {};
+	    this.uniforms = three.UniformsUtils.clone(shader.uniforms);
+	    this.vertexShader = shader.vertexShader;
+	    this.fragmentShader = shader.fragmentShader;
 
-			const shader = WboitBasicShader;
+	    // properties (no uniforms)
 
-			this.defines = {};
-			this.uniforms = three.UniformsUtils.clone( shader.uniforms );
-			this.vertexShader = shader.vertexShader;
-			this.fragmentShader = shader.fragmentShader;
+	    this.combine = three.MultiplyOperation;
 
-			// properties (no uniforms)
+	    this.transparent = true;
 
-			this.combine = three.MultiplyOperation;
+	    this.wireframe = false;
+	    this.wireframeLinewidth = 1;
+	    this.wireframeLinecap = "round";
+	    this.wireframeLinejoin = "round";
 
-			this.transparent = true;
+	    this.fog = true;
 
-			this.wireframe = false;
-			this.wireframeLinewidth = 1;
-			this.wireframeLinecap = 'round';
-			this.wireframeLinejoin = 'round';
+	    // properties (associated w/ uniforms)
 
-			this.fog = true;
+	    const exposePropertyNames = [
+	      // Material
 
-			// properties (associated w/ uniforms)
+	      "opacity",
 
-			const exposePropertyNames = [
+	      // MeshBasicMaterial
 
-				// Material
+	      "diffuse",
+	      "map",
+	      "lightMap",
+	      "lightMapIntensity",
+	      "aoMap",
+	      "aoMapIntensity",
+	      "specularMap",
+	      "alphaMap",
+	      "alphaTest",
+	      "envMap",
+	      "reflectivity",
+	      "refractionRatio",
 
-				'opacity',
+	      // MeshWboitMaterial,
 
-				// MeshBasicMaterial
+	      "weight",
+	    ];
 
-				'diffuse',
-				'map',
-				'lightMap',
-				'lightMapIntensity',
-				'aoMap',
-				'aoMapIntensity',
-				'specularMap',
-				'alphaMap',
-				'alphaTest',
-				'envMap',
-				'reflectivity',
-				'refractionRatio',
+	    for (const propertyName of exposePropertyNames) {
+	      Object.defineProperty(this, propertyName, {
+	        get: function () {
+	          return this.uniforms[propertyName].value;
+	        },
 
-				// MeshWboitMaterial,
+	        set: function (value) {
+	          this.uniforms[propertyName].value = value;
+	        },
+	      });
+	    }
 
-				'weight',
+	    Object.defineProperty(
+	      this,
+	      "color",
+	      Object.getOwnPropertyDescriptor(this, "diffuse")
+	    );
 
-			];
+	    this.setValues(parameters);
+	  }
 
-			for ( const propertyName of exposePropertyNames ) {
+	  copy(source) {
+	    super.copy(source);
 
-				Object.defineProperty( this, propertyName, {
+	    // MeshBasicMaterial
 
-					get: function () {
+	    this.color.copy(source.color);
 
-						return this.uniforms[ propertyName ].value;
+	    this.map = source.map;
 
-					},
+	    this.lightMap = source.lightMap;
+	    this.lightMapIntensity = source.lightMapIntensity;
 
-					set: function ( value ) {
+	    this.aoMap = source.aoMap;
+	    this.aoMapIntensity = source.aoMapIntensity;
 
-						this.uniforms[ propertyName ].value = value;
+	    this.specularMap = source.specularMap;
 
-					}
+	    this.alphaMap = source.alphaMap;
 
-				} );
+	    this.envMap = source.envMap;
+	    this.combine = source.combine;
+	    this.reflectivity = source.reflectivity;
+	    this.refractionRatio = source.refractionRatio;
 
-			}
+	    this.wireframe = source.wireframe;
+	    this.wireframeLinewidth = source.wireframeLinewidth;
+	    this.wireframeLinecap = source.wireframeLinecap;
+	    this.wireframeLinejoin = source.wireframeLinejoin;
 
-			Object.defineProperty( this, 'color', Object.getOwnPropertyDescriptor( this, 'diffuse' ) );
+	    this.fog = source.fog;
 
-			this.setValues( parameters );
+	    // MeshWboitMaterial
 
-		}
+	    this.weight = source.weight;
 
-		copy( source ) {
-
-			super.copy( source );
-
-			// MeshBasicMaterial
-
-			this.color.copy( source.color );
-
-			this.map = source.map;
-
-			this.lightMap = source.lightMap;
-			this.lightMapIntensity = source.lightMapIntensity;
-
-			this.aoMap = source.aoMap;
-			this.aoMapIntensity = source.aoMapIntensity;
-
-			this.specularMap = source.specularMap;
-
-			this.alphaMap = source.alphaMap;
-
-			this.envMap = source.envMap;
-			this.combine = source.combine;
-			this.reflectivity = source.reflectivity;
-			this.refractionRatio = source.refractionRatio;
-
-			this.wireframe = source.wireframe;
-			this.wireframeLinewidth = source.wireframeLinewidth;
-			this.wireframeLinecap = source.wireframeLinecap;
-			this.wireframeLinejoin = source.wireframeLinejoin;
-
-			this.fog = source.fog;
-
-			// MeshWboitMaterial
-
-			this.weight = source.weight;
-
-			return this;
-
-		}
-
+	    return this;
+	  }
 	}
 
 	/**
@@ -509,7 +498,6 @@
 	//
 	///////////////////////////////////////////////////////////////////////////////////*/
 
-
 	const _clearColorZero = new three.Color(0.0, 0.0, 0.0);
 	const _clearColorOne = new three.Color(1.0, 1.0, 1.0);
 
@@ -544,7 +532,7 @@
 
 			gl_FragColor = texture2D( tDiffuse, vUv );
 			gl_FragColor.a *= opacity;
-
+      gl_FragColor = vec4(1.0);
 
 		}`,
 	};
@@ -592,7 +580,7 @@
 	 * Weighted, blended order independent transparency pass.
 	 * Transparent meshes should use MeshWboitMaterial.
 	 */
-	class WboitPass extends Pass_js.Pass {
+	class WboitPass extends Pass.Pass {
 	  constructor(renderer, scene, camera, clearColor, clearAlpha) {
 	    if (!renderer)
 	      return console.error("WboitPass: Renderer must be supplied!");
@@ -622,7 +610,7 @@
 
 	    // Passes
 
-	    this.opaquePass = new ShaderPass_js.ShaderPass(CopyAlphaTestShader);
+	    this.opaquePass = new ShaderPass.ShaderPass(CopyAlphaTestShader);
 	    this.opaquePass.material.depthTest = false;
 	    this.opaquePass.material.depthWrite = false;
 	    this.opaquePass.material.blending = three.CustomBlending;
@@ -630,7 +618,7 @@
 	    this.opaquePass.material.blendSrc = three.OneFactor;
 	    this.opaquePass.material.blendDst = three.ZeroFactor;
 
-	    this.transparentPass = new ShaderPass_js.ShaderPass(CopyAlphaTestShader);
+	    this.transparentPass = new ShaderPass.ShaderPass(CopyAlphaTestShader);
 	    this.transparentPass.material.depthTest = false;
 	    this.transparentPass.material.depthWrite = false;
 	    this.transparentPass.material.blending = three.CustomBlending;
@@ -638,7 +626,7 @@
 	    this.transparentPass.material.blendSrc = three.OneFactor;
 	    this.transparentPass.material.blendDst = three.OneMinusSrcAlphaFactor;
 
-	    this.copyPass = new ShaderPass_js.ShaderPass(CopyShader);
+	    this.copyPass = new ShaderPass.ShaderPass(CopyShader);
 	    this.copyPass.material.depthTest = false;
 	    this.copyPass.material.depthWrite = false;
 	    this.copyPass.material.blending = three.CustomBlending;
@@ -646,14 +634,14 @@
 	    this.copyPass.material.blendSrc = three.OneFactor;
 	    this.copyPass.material.blendDst = three.ZeroFactor;
 
-	    this.compositePass = new ShaderPass_js.ShaderPass(WboitCompositeShader);
+	    this.compositePass = new ShaderPass.ShaderPass(WboitCompositeShader);
 	    this.compositePass.material.transparent = true;
 	    this.compositePass.material.blending = three.CustomBlending;
 	    this.compositePass.material.blendEquation = three.AddEquation;
 	    this.compositePass.material.blendSrc = three.OneMinusSrcAlphaFactor;
 	    this.compositePass.material.blendDst = three.SrcAlphaFactor;
 
-	    const testPass = new ShaderPass_js.ShaderPass(FillShader);
+	    const testPass = new ShaderPass.ShaderPass(FillShader);
 	    const testR = 1.0;
 	    const testG = 1.0;
 	    const testB = 1.0;
@@ -778,7 +766,7 @@
 	    renderer,
 	    writeBuffer = null /* readBuffer = null, deltaTime, maskActive */
 	  ) {
-	    console.log("ASDSADADS");
+	    console.log("ASDASDFFF");
 	    const scene = this.scene;
 	    if (!scene || !scene.isScene) return;
 
@@ -1099,46 +1087,46 @@
 	 * Helper utilities for WboitPass
 	 */
 
-
 	let _materialCounter = 0;
 	const _stage = { value: 0.5 };
 
 	class WboitUtils {
+	  static patch(existingMaterial) {
+	    let materials = Array.isArray(existingMaterial)
+	      ? existingMaterial
+	      : [existingMaterial];
 
-		static patch( existingMaterial ) {
+	    for (let i = 0; i < materials.length; i++) {
+	      const material = materials[i];
+	      if (!material.isMaterial) continue;
+	      if (material.wboitEnabled) continue;
 
-			let materials = Array.isArray( existingMaterial ) ? existingMaterial : [ existingMaterial ];
+	      const existingOnBeforeCompile = material.onBeforeCompile;
 
-			for ( let i = 0; i < materials.length; i ++ ) {
+	      material.onBeforeCompile = function (shader, renderer) {
+	        if (material.wboitEnabled === true) return;
+	        material.wboitEnabled = true;
 
-				const material = materials[i];
-				if ( ! material.isMaterial ) continue;
-				if ( material.wboitEnabled ) continue;
+	        if (typeof existingOnBeforeCompile === "function")
+	          existingOnBeforeCompile(shader, renderer);
 
-				const existingOnBeforeCompile = material.onBeforeCompile;
+	        shader.uniforms.renderStage = _stage;
+	        shader.uniforms.weight = { value: 1.0 };
 
-				material.onBeforeCompile = function( shader, renderer ) {
-
-					if ( material.wboitEnabled === true ) return;
-					material.wboitEnabled = true;
-
-					if (typeof existingOnBeforeCompile === 'function') existingOnBeforeCompile( shader, renderer );
-
-					shader.uniforms.renderStage = _stage;
-					shader.uniforms.weight = { value: 1.0 };
-
-					shader.fragmentShader = `
+	        shader.fragmentShader =
+	          `
 					uniform float renderStage;
 					uniform float weight;
 				` + shader.fragmentShader;
 
-					// shader.fragmentShader = shader.fragmentShader.replace('#include <tonemapping_fragment>', '');
-					// shader.fragmentShader = shader.fragmentShader.replace('#include <colorspace_fragment>', '');
+	        // shader.fragmentShader = shader.fragmentShader.replace('#include <tonemapping_fragment>', '');
+	        // shader.fragmentShader = shader.fragmentShader.replace('#include <colorspace_fragment>', '');
 
-					shader.fragmentShader = shader.fragmentShader.replace( /}$/gm, `
+	        shader.fragmentShader = shader.fragmentShader.replace(
+	          /}$/gm,
+	          `
 
-					if ( renderStage == ${ WboitStages.Acummulation.toFixed( 1 ) } ) {
-
+					if ( renderStage == ${WboitStages.Acummulation.toFixed(1)} ) {
 						vec4 accum = gl_FragColor.rgba;
 
 						#ifndef PREMULTIPLIED_ALPHA
@@ -1151,48 +1139,38 @@
 						float w = clamp( pow( ( accum.a * 8.0 + 0.001 ) * ( - z * scaleWeight + 1.0 ), 3.0 ) * 1000.0, 0.001, 300.0 );
 
 						gl_FragColor = accum * w;
+						gl_FragColor = vec4(1.0, 1.0, 1.0, 1.0);
 
-					} else if ( renderStage == ${ WboitStages.Revealage.toFixed( 1 ) } ) {
+					} else if ( renderStage == ${WboitStages.Revealage.toFixed(1)} ) {
 
 					 	gl_FragColor = vec4( gl_FragColor.a * gl_FragCoord.z );
 
 					}
 
-				}` );
+				}`
+	        );
+	        console.log(shader.fragmentShader);
+	        Object.defineProperty(material, "renderStage", {
+	          get: function () {
+	            return _stage;
+	          },
 
-					Object.defineProperty( material, 'renderStage', {
+	          set: function (stage) {
+	            _stage.value = parseFloat(stage);
+	          },
+	        });
+	      };
 
-						get: function() {
+	      const materialID = _materialCounter;
+	      _materialCounter++;
 
-							return _stage;
+	      material.customProgramCacheKey = function () {
+	        return materialID;
+	      };
 
-						},
-
-						set: function( stage ) {
-
-							_stage.value = parseFloat( stage );
-
-						}
-
-					} );
-
-				};
-
-				const materialID = _materialCounter;
-				_materialCounter ++;
-
-				material.customProgramCacheKey = function () {
-
-					return materialID;
-
-				};
-
-				material.needsUpdate = true;
-
-			}
-
-		}
-
+	      material.needsUpdate = true;
+	    }
+	  }
 	}
 
 	exports.FillShader = FillShader;
@@ -1202,6 +1180,8 @@
 	exports.WboitPass = WboitPass;
 	exports.WboitUtils = WboitUtils;
 	exports.sRGBShader = sRGBShader;
+
+	Object.defineProperty(exports, '__esModule', { value: true });
 
 }));
 //# sourceMappingURL=index.umd.cjs.map
