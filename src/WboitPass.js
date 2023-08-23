@@ -303,7 +303,6 @@ class WboitPass extends Pass {
     renderer,
     writeBuffer = null /* readBuffer = null, deltaTime, maskActive */
   ) {
-    console.log("ASDSADADS");
     const scene = this.scene;
     if (!scene || !scene.isScene) return;
 
